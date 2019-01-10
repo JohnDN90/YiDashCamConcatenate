@@ -3,9 +3,6 @@ Combine individual video segments from Yi Dash Cam recordings into a single
 continuous recording per trip and adds optional metadata to output file.
 
 ## License
-Combine individual video segments from Yi Dash Cam recordings into a single
-continuous recording per trip and adds optional metadata to output file.
-
 Copyright (C) 2019  David John Neiferd
 
 This program is free software: you can redistribute it and/or modify
@@ -23,18 +20,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Main repository is located at: https://github.com/JohnDN90/YiDashCamConcatenate
 
-
 ## Legalities
 This code uses FFmpeg to combine the multiple segments of video (typically 1 
 minute in length) that the Yi Dash Cam creates into a single video file per 
 trip. As such, this creates a new video file using your PC to be used in place
-of the individual Yi Dash Cam video segments. The accessed time and modification
-time of the new video file are set equal to the access and modification times of
-the first Yi Dash Cam video segment belonging to the new video file so that the
-modifcation time of the new combined video file corresponds with the actual 
-created date of the original video. The modification time should correspond to
-the date and time overlay in the video itself, unless you have modified the 
-Yi Dash Cam videos yourself before using this program.  
+of the individual Yi Dash Cam video segments. 
+
+To keep the information accurate to the original files, the "Accessed" time and
+"Modified" time on the combined video file are set equal to the original 
+"Modified" time of the first video segment that was used in the combined video
+file. This time should correspond with the timestamp overlay in the video itself
+unless you have modified the video file before using this program. This time is
+also encoded in the video metadata as well.
 
 Although the original  video and audio remain completely unaltered when using 
 the "copy" codec. This  may have  implications as to whether your new combined 
@@ -45,37 +42,53 @@ keeping the original Yi Dash Cam video files as they are and not using this
 program. This program is best used for archiving uneventful dash cam footage or
 combining clips to upload to a video hosting website.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
 ## Requirements
 FFmpeg (https://www.ffmpeg.org/)
 
-Python 2.7 for running from Python (not required for executable)
+Python 2.7 for running from Python (not required for executable). If running 
+from Python the following modules are required as well: time, os, subprocess, 
+pytz, and datetime.
 
 ## Instructions
-1) Edit the settings.cfg file to your desired settings. See Settings sections for
+1) Obtain the compiled executable, YDCC, from the releases page 
+(https://github.com/JohnDN90/YiDashCamConcatenate/releases).
+
+2) Edit the settings.cfg file to your desired settings. See Settings sections for
 more details.
 
-2) In Linux, open a terminal and type /path/to/DashCamArchive, press enter, and 
+3) In Linux, open a terminal and type /path/to/DashCamArchive, press enter, and 
 follow on-screen instruction. (Be sure to replace /path/to with the actual path 
 on your PC).  If you get a "Permission denied" error, you'll have to set "YDCC"
 as executable by right clicking on YDCC, click Properties, click Permission, 
 click the  box beside "Allow executing file as program" so that a checkmark 
 appears in it, then click Close.
 
-3) In Windows, double click "YDCC", it should open in the Command Prompt, follow
+4) In Windows, double click "YDCC", it should open in the Command Prompt, follow
 the on-screen instructions.
 
 
-
 ## Settings
-The settings.cfg needs to
-follow Python syntax.
+The settings.cfg needs to follow Python syntax.
 
+### FFmpeg Parameters
 Change ffmpegPath to the path to the ffmpeg executable on your system.
 
+### File I/O Parameters
 Change sdCardRoot to the path that contains the "/Movie", "/Photo", and "/EMR" 
 directories created by the Yi Dash Cam.
 
 Change outputDir to the path that you want your combined videos to be saved.
+
+### Metadata Parameters
+You can optionally leave all of these details as a blank string, "", if you do
+not want to add the metadata, however I recommend adding it as it will help in
+the future to identify which camera the video was recorded on as well as who
+owns the rights to the video. 
 
 Change camName to the name of your dash camera.
 
@@ -87,7 +100,7 @@ Change comment to anything you want.
 
 Change copyright to the name of the person who owns the rights to the video.
 
-### Explanation of Other Parameters
+### Video Parameters
 
 #### maxDiff
 This is the number of seconds that is allowed to pass between consecutive video
