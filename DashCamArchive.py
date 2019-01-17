@@ -39,6 +39,7 @@ import os
 from subprocess import check_output
 from pytz import timezone, utc
 from datetime import datetime
+from shutil import copyfile
 
 
 def getUTCmtime(filePath):
@@ -69,6 +70,9 @@ def pyconcatenate(vlist):
         list = list + v
     return list
 
+def pyargsort(vlist):
+    return sorted(range(len(vlist)), key=vlist.__getitem__)
+
 empty = pyempty
 diff = pydiff
 where = pywhere
@@ -97,6 +101,12 @@ camModel = ""
 camSerialNum = ""
 comment = ""
 copyright = ""
+combineMovieAndEMR = False
+optimizePhotos = False
+resolution = None
+CRF = 23
+speed = "medium"
+videoCodec = "copy"
 
 
 # Load configuration file
@@ -145,7 +155,9 @@ print("videoCodec = %s"%codec)
 print("CRF = %s"%crf)
 print("speed = %s"%preset)
 print("resolution = %s"%res)
-print("downscaler = %s\n"%downscaler)
+print("downscaler = %s"%downscaler)
+print("combineMovieAndEMR = %s"%combineMovieAndEMR)
+print("optimizePhotos = %s\n"%optimizePhotos)
 
 print("---------------------------------------------------")
 
@@ -153,31 +165,6 @@ print("---------------------------------------------------")
 ans = raw_input("If the above settings look correct and you agree to the terms of use type yes to begin or no to cancel...   ")
 if ans.lower() != "yes":
     raise ValueError("User did not type yes, canceling operation.")
-
-
-# ffmpegPath = r"/home/john/bin/ffmpeg"
-#
-# # Metadata Settings
-# # -----------------
-# camName = r"Yi Ultra Dash Camera"
-# camModel = r"YCS.1517"
-# camSerialNum = r"CFA0WAUSBL000000000"
-# comment="Copyright John Doe Smith"
-# copyright="John Doe Smith"
-#
-# # File Input/Output Settings
-# # ==========================
-# sdCardRoot = r"/media/LargeStorage/Test"
-# outputDir = r"/media/LargeStorage/Test"
-#
-# # Dash Cam Video Settings
-# # =======================
-# maxDiff = 10
-# videoCodec = "copy"
-# CRF = 23
-# speed = "slow"
-# resolution = "636:360"
-# downscaler = "lanczos+full_chroma_int+full_chroma_inp+accurate_rnd"
 
 dashCamVidRelativePath = "/Movie"
 dashCamEmrRelativePath = "/EMR"
@@ -194,98 +181,145 @@ def getTitleTime(filename):
 def abslistdir(d):
     return [os.path.join(d,f) for f in os.listdir(d)]
 
-vidList = abslistdir(sdCardRoot+dashCamVidRelativePath)
-fullVidList = [vid for vid in vidList if vid.endswith(".MP4") and "_s" not in vid]
-fullVidList.sort()
 
-#mTimes = [os.path.getmtime(vid) for vid in fullVidList]
-mTimes = [getTitleDate(vid) for vid in fullVidList]
-mTimes = list(set(mTimes))
+def processPhotos(plist):
+    for file in plist:
+        outFile = os.path.join(outputDir, os.path.basename(file))
+        copyfile(file, outFile)
+        if optimizePhotos:
+            cmd = ['jpegoptim', '-p', outFile]
+            check_output(cmd)
 
-for mTime in mTimes:
-    vidDateList = [vid for vid in fullVidList if getTitleDate(vid) == mTime]
 
-    stimes = empty(len(vidDateList))
-    for i in range(len(vidDateList)):
-        vid = vidDateList[i]
-        t = vid.split("_")[-1][:-4]
-        stimes[i] = float(t[:2])*3600 + float(t[2:4])*60 + float(t[4:])
+def processVideos(vlist):
+    # mTimes = [os.path.getmtime(vid) for vid in vlist]
+    mTimes = [getTitleDate(vid) for vid in vlist]
+    mTimes = list(set(mTimes))
 
-    ind_newVids = getIndNewVids(stimes, maxDiff)
+    for mTime in mTimes:
+        vidDateList = [vid for vid in vlist if getTitleDate(vid) == mTime]
 
-    for i in range(len(ind_newVids)-1):
-        istart = int(ind_newVids[i])
-        iend = int(ind_newVids[i+1])
-        vidList = vidDateList[istart:iend]
+        stimes = empty(len(vidDateList))
+        for i in range(len(vidDateList)):
+            vid = vidDateList[i]
+            t = vid.split("_")[-1][:-4]
+            stimes[i] = float(t[:2]) * 3600 + float(t[2:4]) * 60 + float(t[4:])
+
+        ind_newVids = getIndNewVids(stimes, maxDiff)
+
+        for i in range(len(ind_newVids) - 1):
+            istart = int(ind_newVids[i])
+            iend = int(ind_newVids[i + 1])
+            vidList = vidDateList[istart:iend]
+            with open("vidList.txt", 'w') as listFile:
+                for vid in vidList:
+                    listFile.write("file '%s'\n" % vid)
+            fTime = getTitleTime(vidList[0])
+            outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
+            localmtime = getLocalmtime(vidList[0])
+            if codec == "copy":
+                cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                      '-c:v %s -c:a copy -movflags +faststart "%s"' \
+                      % (
+                      ffmpegPath, localmtime, author, author, author, comment,
+                      copyright, codec, outputPath)
+            elif (codec == "libx264") or (codec == "libx265"):
+                if res is None:
+                    cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                          '-c:v %s -preset %s ' \
+                          '-crf %s -c:a copy -movflags +faststart "%s"' \
+                          % (ffmpegPath, localmtime, author, author, author,
+                             comment, copyright,
+                             codec, preset, crf, outputPath)
+                else:
+                    cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                          '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
+                          '-crf %s -c:a copy -movflags +faststart "%s"' \
+                          % (ffmpegPath, localmtime, author, author, author,
+                             comment, copyright, res, downscaler, codec, preset,
+                             crf,
+                             outputPath)
+            else:
+                raise ValueError(
+                    "User-specified codec, %s, is not valid." % codec)
+            atime = os.path.getatime(vidList[0])
+            mtime = os.path.getmtime(vidList[0])
+            # 1+1
+            print("Video List:\n%s\n" % vidList)
+            print("cmd = \n%s\n" % cmd)
+            os.system(cmd)
+            os.utime(outputPath, (atime, mtime))
+
+        istart = ind_newVids[-1]
+        vidList = vidDateList[istart:]
         with open("vidList.txt", 'w') as listFile:
             for vid in vidList:
-                listFile.write("file '%s'\n"%vid)
+                listFile.write("file '%s'\n" % vid)
         fTime = getTitleTime(vidList[0])
-        outputPath = "%s/%s_%s_trip.mp4"%(outputDir,mTime,fTime)
-        localmtime = getUTCmtime(vidList[0])
+        outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
+        localmtime = getLocalmtime(vidList[0])
         if codec == "copy":
             cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
                   '-c:v %s -c:a copy -movflags +faststart "%s"' \
-                  %(ffmpegPath, localmtime, author, author, author, comment, copyright, codec, outputPath)
+                  % (ffmpegPath, localmtime, author, author, author, comment,
+                     copyright,
+                     codec, outputPath)
         elif (codec == "libx264") or (codec == "libx265"):
             if res is None:
                 cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
                       '-c:v %s -preset %s ' \
                       '-crf %s -c:a copy -movflags +faststart "%s"' \
-                      % (ffmpegPath, localmtime, author, author, author, comment, copyright,
-                         codec, preset, crf, outputPath)
+                      % (
+                      ffmpegPath, localmtime, author, author, author, comment,
+                      copyright, codec, preset, crf, outputPath)
             else:
                 cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
                       '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
-                      '-crf %s -c:a copy -movflags +faststart "%s"'\
-                      %(ffmpegPath, localmtime, author, author, author, comment, copyright, res, downscaler, codec, preset, crf,
-                        outputPath)
+                      '-crf %s -c:a copy -movflags +faststart "%s"' \
+                      % (
+                      ffmpegPath, localmtime, author, author, author, comment,
+                      copyright, res, downscaler, codec, preset, crf,
+                      outputPath)
         else:
-            raise ValueError("User-specified codec, %s, is not valid."%codec)
+            raise ValueError("User-specified codec, %s, is not valid." % codec)
+        # 1+1
         atime = os.path.getatime(vidList[0])
         mtime = os.path.getmtime(vidList[0])
-        # 1+1
-        print("Video List:\n%s\n"%vidList)
-        print("cmd = \n%s\n"%cmd)
+
+        print("Video List:\n%s\n" % vidList)
         os.system(cmd)
         os.utime(outputPath, (atime, mtime))
 
-    istart = ind_newVids[-1]
-    vidList = vidDateList[istart:]
-    with open("vidList.txt", 'w') as listFile:
-        for vid in vidList:
-            listFile.write("file '%s'\n" % vid)
-    fTime = getTitleTime(vidList[0])
-    outputPath = "%s/%s_%s_trip.mp4" % (outputDir,mTime,fTime)
-    localmtime = getUTCmtime(vidList[0])
-    if codec == "copy":
-        cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-              '-c:v %s -c:a copy -movflags +faststart "%s"' \
-              % (ffmpegPath, localmtime, author, author, author, comment, copyright,
-                 codec, outputPath)
-    elif (codec == "libx264") or (codec == "libx265"):
-        if res is None:
-            cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                  '-c:v %s -preset %s ' \
-                  '-crf %s -c:a copy -movflags +faststart "%s"' \
-                  % (ffmpegPath, localmtime, author, author, author, comment, copyright, codec, preset, crf, outputPath)
-        else:
-            cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                  '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
-                  '-crf %s -c:a copy -movflags +faststart "%s"' \
-                  % (ffmpegPath, localmtime, author, author, author, comment, copyright, res, downscaler, codec, preset, crf,
-                     outputPath)
-    else:
-        raise ValueError("User-specified codec, %s, is not valid." % codec)
-    # 1+1
-    atime = os.path.getatime(vidList[0])
-    mtime = os.path.getmtime(vidList[0])
+    try:
+        os.remove("vidList.txt")
+    except:
+        pass
 
-    print("Video List:\n%s\n"%vidList)
-    os.system(cmd)
-    os.utime(outputPath, (atime, mtime))
 
-os.remove("vidList.txt")
+
+vidList = abslistdir(sdCardRoot+dashCamVidRelativePath)
+fullVidList = [vid for vid in vidList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
+fullVidList.sort()
+
+emrList = abslistdir(sdCardRoot+dashCamEmrRelativePath)
+fullEmrList = [vid for vid in emrList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
+fullEmrList.sort()
+
+picList = abslistdir(sdCardRoot + dashCamPhotoRelativePath)
+
+if combineMovieAndEMR:
+    baselist = [os.path.basename(vid) for vid in (fullVidList+fullEmrList)]
+    ind = pyargsort(baselist)
+    fullBase = (fullVidList+fullEmrList)
+    fullList = [fullBase[i] for i in ind]
+    processVideos(fullList)
+else:
+    processVideos(fullVidList)
+    processVideos(fullEmrList)
+
+
+processPhotos(picList)
+
 
 print("\nAll done!\n")
 

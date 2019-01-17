@@ -50,6 +50,9 @@ GNU General Public License for more details.
 ## Requirements
 FFmpeg (https://www.ffmpeg.org/)
 
+jpegoptim (https://github.com/tjko/jpegoptim) if you want to optimize photos
+to reduce file size while maintaining same quality.
+
 Python 2.7 for running from Python (not required for executable). If running 
 from Python the following modules are required as well: time, os, subprocess, 
 pytz, and datetime.
@@ -75,8 +78,11 @@ the on-screen instructions.
 ## Settings
 The settings.cfg needs to follow Python syntax.
 
-### FFmpeg Parameters
+### Program Parameters
 Change ffmpegPath to the path to the ffmpeg executable on your system.
+
+Change jpegoptimPath to the path to the jpegoptim executable on your system. Not 
+required if optimizePhotos is set to False.
 
 ### File I/O Parameters
 Change sdCardRoot to the path that contains the "/Movie", "/Photo", and "/EMR" 
@@ -184,6 +190,18 @@ This has no effect when using videoCodec="copy" or
 when resolution=None.
 
 
+#### combineMovieAndEMR
+Whether the videos stored in the EMR folder should be combined with the videos
+in the Movie folder. EMR is for emergency recordings, but an automatic EMR 
+recordings can be sensitive and set up by a speed bump for example.  If you 
+know for a fact that all the videos in the EMR folder are a result false 
+positives (i.e. speed bumps) set this to True.  If you have any true emergency
+recordings (i.e. crash, accident, etc.), set this to False.
 
+#### optimizePhotos
+Whether the photos should be optimized to reduce storage requirements without
+reducing photo quality.  This is essentially lossless compression which utilizes
+the jpegoptim program. If set to True, you must specify the path to jpegoptim on
+your system in the jpegoptimPath variable.
 
 
