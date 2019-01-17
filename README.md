@@ -51,7 +51,8 @@ GNU General Public License for more details.
 FFmpeg (https://www.ffmpeg.org/)
 
 jpegoptim (https://github.com/tjko/jpegoptim) if you want to optimize photos
-to reduce file size while maintaining same quality.
+to reduce file size while maintaining same quality. For a binary file for 
+Windows see (https://github.com/XhmikosR/jpegoptim-windows/releases) .
 
 Python 2.7 for running from Python (not required for executable). If running 
 from Python the following modules are required as well: time, os, subprocess, 
