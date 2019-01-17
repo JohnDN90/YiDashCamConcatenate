@@ -42,6 +42,20 @@ from datetime import datetime
 from shutil import copyfile
 import sys
 
+if os.name == "nt":
+    import pywintypes, win32file, win32con
+    def changeFileCreationTime(fname, newtime):
+        wintime = pywintypes.Time(newtime)
+        winfile = win32file.CreateFile(
+            fname, win32con.GENERIC_WRITE,
+            win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE | win32con.FILE_SHARE_DELETE,
+            None, win32con.OPEN_EXISTING,
+            win32con.FILE_ATTRIBUTE_NORMAL, None)
+        win32file.SetFileTime(winfile, wintime, None, None)
+        winfile.close()
+else:
+    def changeFileCreationTime(fname, newtime):
+        pass
 
 def getUTCmtime(filePath):
     mt = os.path.getmtime(filePath)
@@ -189,11 +203,17 @@ def abslistdir(d):
 
 def processPhotos(plist):
     for file in plist:
-        outFile = os.path.join(outputDir, os.path.basename(file))
-        copyfile(file, outFile)
-        if optimizePhotos:
-            cmd = ['jpegoptim', '-p', outFile]
-            check_output(cmd)
+        if file.lower().endswith(".jpg"):
+            outFile = os.path.join(outputDir, os.path.basename(file))
+            copyfile(file, outFile)
+            if optimizePhotos:
+                cmd = ['jpegoptim', '-p', outFile]
+                check_output(cmd)
+            atime = os.path.getatime(file)
+            mtime = os.path.getmtime(file)
+            ctime = os.path.getctime(file)
+            os.utime(outFile, (atime, mtime))
+            changeFileCreationTime(outFile, ctime)
 
 
 def processVideos(vlist):
@@ -287,6 +307,7 @@ def processVideos(vlist):
             mtime = os.path.getmtime(vidList[0])
             call(cmd)
             os.utime(outputPath, (atime, mtime))
+            changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
         istart = ind_newVids[-1]
         vidList = vidDateList[istart:]
@@ -359,6 +380,7 @@ def processVideos(vlist):
         mtime = os.path.getmtime(vidList[0])
         call(cmd)
         os.utime(outputPath, (atime, mtime))
+        changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
     try:
         os.remove("vidList.txt")
