@@ -36,7 +36,7 @@ print("See the README.md and LICENSE files for details.\n\n")
 sleep(5)
 
 import os
-from subprocess import check_output
+from subprocess import check_output, call
 from pytz import timezone, utc
 from datetime import datetime
 from shutil import copyfile
@@ -222,36 +222,70 @@ def processVideos(vlist):
             outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
             localmtime = getLocalmtime(vidList[0])
             if codec == "copy":
-                cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                      '-c:v %s -c:a copy -movflags +faststart "%s"' \
-                      % (
-                      ffmpegPath, localmtime, author, author, author, comment,
-                      copyright, codec, outputPath)
+                # cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                #       '-c:v %s -c:a copy -movflags +faststart "%s"' \
+                #       % (
+                #       ffmpegPath, localmtime, author, author, author, comment,
+                #       copyright, codec, outputPath)
+                cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe', '0',
+                       '-i', 'vidList.txt',
+                       '-metadata', 'creation_time=%s'%str(localmtime),
+                       '-metadata', 'artist="%s"'%author,
+                       '-metadata', 'author="%s"'%author,
+                       '-metadata', 'album_author="%s"'%author,
+                       '-metadata', 'comment="%s"'%comment,
+                       '-metadata', 'copyright="%s"'%copyright,
+                       '-c:v', codec, '-c:a', 'copy', '-movflags', '+faststart',
+                       outputPath]
+
             elif (codec == "libx264") or (codec == "libx265"):
                 if res is None:
-                    cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                          '-c:v %s -preset %s ' \
-                          '-crf %s -c:a copy -movflags +faststart "%s"' \
-                          % (ffmpegPath, localmtime, author, author, author,
-                             comment, copyright,
-                             codec, preset, crf, outputPath)
+                    # cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                    #       '-c:v %s -preset %s ' \
+                    #       '-crf %s -c:a copy -movflags +faststart "%s"' \
+                    #       % (ffmpegPath, localmtime, author, author, author,
+                    #          comment, copyright,
+                    #          codec, preset, crf, outputPath)
+                    cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                           '0',
+                           '-i', 'vidList.txt',
+                           '-metadata', 'creation_time=%s' % str(localmtime),
+                           '-metadata', 'artist="%s"' % author,
+                           '-metadata', 'author="%s"' % author,
+                           '-metadata', 'album_author="%s"' % author,
+                           '-metadata', 'comment="%s"' % comment,
+                           '-metadata', 'copyright="%s"' % copyright,
+                           '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                           '-c:a', 'copy', '-movflags', '+faststart',
+                           outputPath]
+
                 else:
-                    cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                          '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
-                          '-crf %s -c:a copy -movflags +faststart "%s"' \
-                          % (ffmpegPath, localmtime, author, author, author,
-                             comment, copyright, res, downscaler, codec, preset,
-                             crf,
-                             outputPath)
+                #     cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                #           '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
+                #           '-crf %s -c:a copy -movflags +faststart "%s"' \
+                #           % (ffmpegPath, localmtime, author, author, author,
+                #              comment, copyright, res, downscaler, codec, preset,
+                #              crf,
+                #              outputPath)
+                    cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                           '0',
+                           '-i', 'vidList.txt',
+                           '-metadata', 'creation_time=%s' % str(localmtime),
+                           '-metadata', 'artist="%s"' % author,
+                           '-metadata', 'author="%s"' % author,
+                           '-metadata', 'album_author="%s"' % author,
+                           '-metadata', 'comment="%s"' % comment,
+                           '-metadata', 'copyright="%s"' % copyright,
+                           '-vf', 'scale=%s' % res, '-sws_flags', downscaler,
+                           '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                           '-c:a', 'copy', '-movflags', '+faststart',
+                           outputPath]
             else:
                 raise ValueError(
                     "User-specified codec, %s, is not valid." % codec)
             atime = os.path.getatime(vidList[0])
             mtime = os.path.getmtime(vidList[0])
-            # 1+1
-            print("Video List:\n%s\n" % vidList)
-            print("cmd = \n%s\n" % cmd)
-            os.system(cmd)
+            call(cmd)
             os.utime(outputPath, (atime, mtime))
 
         istart = ind_newVids[-1]
@@ -263,35 +297,67 @@ def processVideos(vlist):
         outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
         localmtime = getLocalmtime(vidList[0])
         if codec == "copy":
-            cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                  '-c:v %s -c:a copy -movflags +faststart "%s"' \
-                  % (ffmpegPath, localmtime, author, author, author, comment,
-                     copyright,
-                     codec, outputPath)
+            # cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+            #       '-c:v %s -c:a copy -movflags +faststart "%s"' \
+            #       % (ffmpegPath, localmtime, author, author, author, comment,
+            #          copyright,
+            #          codec, outputPath)
+            cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe', '0',
+                   '-i', 'vidList.txt',
+                   '-metadata', 'creation_time=%s' % str(localmtime),
+                   '-metadata', 'artist="%s"' % author,
+                   '-metadata', 'author="%s"' % author,
+                   '-metadata', 'album_author="%s"' % author,
+                   '-metadata', 'comment="%s"' % comment,
+                   '-metadata', 'copyright="%s"' % copyright,
+                   '-c:v', codec, '-c:a', 'copy', '-movflags', '+faststart',
+                   outputPath]
+
         elif (codec == "libx264") or (codec == "libx265"):
             if res is None:
-                cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                      '-c:v %s -preset %s ' \
-                      '-crf %s -c:a copy -movflags +faststart "%s"' \
-                      % (
-                      ffmpegPath, localmtime, author, author, author, comment,
-                      copyright, codec, preset, crf, outputPath)
+                # cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                #       '-c:v %s -preset %s ' \
+                #       '-crf %s -c:a copy -movflags +faststart "%s"' \
+                #       % (
+                #       ffmpegPath, localmtime, author, author, author, comment,
+                #       copyright, codec, preset, crf, outputPath)
+                cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe', '0',
+                       '-i', 'vidList.txt',
+                       '-metadata', 'creation_time=%s' % str(localmtime),
+                       '-metadata', 'artist="%s"' % author,
+                       '-metadata', 'author="%s"' % author,
+                       '-metadata', 'album_author="%s"' % author,
+                       '-metadata', 'comment="%s"' % comment,
+                       '-metadata', 'copyright="%s"' % copyright,
+                       '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                       '-c:a', 'copy', '-movflags', '+faststart',
+                       outputPath]
+
             else:
-                cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
-                      '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
-                      '-crf %s -c:a copy -movflags +faststart "%s"' \
-                      % (
-                      ffmpegPath, localmtime, author, author, author, comment,
-                      copyright, res, downscaler, codec, preset, crf,
-                      outputPath)
+                # cmd = '"%s" -hide_banner -f concat -safe 0 -i vidList.txt -metadata creation_time="%s" -metadata artist="%s" -metadata author="%s" -metadata album_author="%s" -metadata comment="%s" -metadata copyright="%s" ' \
+                #       '-vf scale=%s -sws_flags %s -c:v %s -preset %s ' \
+                #       '-crf %s -c:a copy -movflags +faststart "%s"' \
+                #       % (
+                #       ffmpegPath, localmtime, author, author, author, comment,
+                #       copyright, res, downscaler, codec, preset, crf,
+                #       outputPath)
+                cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe', '0',
+                       '-i', 'vidList.txt',
+                       '-metadata', 'creation_time=%s' % str(localmtime),
+                       '-metadata', 'artist="%s"' % author,
+                       '-metadata', 'author="%s"' % author,
+                       '-metadata', 'album_author="%s"' % author,
+                       '-metadata', 'comment="%s"' % comment,
+                       '-metadata', 'copyright="%s"' % copyright,
+                       '-vf', 'scale=%s'%res, '-sws_flags', downscaler,
+                       '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                       '-c:a', 'copy', '-movflags', '+faststart',
+                       outputPath]
         else:
             raise ValueError("User-specified codec, %s, is not valid." % codec)
-        # 1+1
         atime = os.path.getatime(vidList[0])
         mtime = os.path.getmtime(vidList[0])
-
-        print("Video List:\n%s\n" % vidList)
-        os.system(cmd)
+        call(cmd)
         os.utime(outputPath, (atime, mtime))
 
     try:
