@@ -40,6 +40,7 @@ from subprocess import check_output
 from pytz import timezone, utc
 from datetime import datetime
 from shutil import copyfile
+import sys
 
 
 def getUTCmtime(filePath):
@@ -110,7 +111,11 @@ videoCodec = "copy"
 
 
 # Load configuration file
-for line in open("./settings.cfg", 'r'):
+if getattr(sys, 'frozen', False):
+    application_path = os.path.dirname(sys.executable)
+elif __file__:
+    application_path = os.path.dirname(__file__)
+for line in open(application_path+"/settings.cfg", 'r'):
     exec(line)
 codec = videoCodec
 preset = speed
@@ -192,7 +197,6 @@ def processPhotos(plist):
 
 
 def processVideos(vlist):
-    # mTimes = [os.path.getmtime(vid) for vid in vlist]
     mTimes = [getTitleDate(vid) for vid in vlist]
     mTimes = list(set(mTimes))
 
