@@ -24,17 +24,6 @@ Main repository is located at: https://github.com/JohnDN90/YiDashCamConcatenate
 
 from time import sleep
 
-print("\n\nYiDashCamConcatenate Copyright (C) 2019 David John Neiferd\n")
-print("This program is distributed in the hope that it will be useful,")
-print("but WITHOUT ANY WARRANTY; without even the implied warranty of")
-print("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the")
-print("GNU General Public License for more details.")
-print("This is free software, and you are welcome to redistribute it")
-print("under certain conditions.")
-print("See the README.md and LICENSE files for details.\n\n")
-
-sleep(5)
-
 import os
 from subprocess import check_output, call
 from pytz import timezone, utc
@@ -56,6 +45,7 @@ if os.name == "nt":
         winfile.close()
 else:
     def changeFileCreationTime(fname, newtime):
+        # This is not supported on Linux systems.
         pass
 
 def getUTCmtime(filePath):
@@ -95,102 +85,10 @@ where = pywhere
 concatenate = pyconcatenate
 
 def getIndNewVids(stimes, maxDiff):
-    # logic = (diff(stimes) - 60) > maxDiff
     logic = [(i-60.0)>maxDiff for i in diff(stimes)]
-    # ind_newVids = where(logic)[0] + 1
     ind_newVids = [i+1 for i in where(logic)[0]]
     ind_newVids = concatenate(([0], ind_newVids))
     return ind_newVids
-
-# Some defaults if not defined in settings.cfg
-maxDiff = 5
-codec = "copy"
-preset = "medium"
-crf = "23"
-res = None
-downscaler = "bicubic"
-sdCardRoot = None
-outputDir = None
-ffmpegPath = "ffmpeg"
-camName = ""
-camModel = ""
-camSerialNum = ""
-comment = ""
-copyright = ""
-combineMovieAndEMR = False
-optimizePhotos = False
-resolution = None
-CRF = 23
-speed = "medium"
-videoCodec = "copy"
-denoise=None
-audioCodec = "aac"
-audioBitrate = "192k"
-
-# Load configuration file
-if getattr(sys, 'frozen', False):
-    application_path = os.path.dirname(sys.executable)
-elif __file__:
-    application_path = os.path.dirname(__file__)
-for line in open(application_path+"/settings.cfg", 'r'):
-    exec(line)
-codec = videoCodec
-preset = speed
-crf = CRF
-res = resolution
-author = camName + " " + camModel + " " + camSerialNum
-
-
-if sdCardRoot is None:
-    raise ValueError("sdCardRoot was not specified in settings.cfg!")
-
-if outputDir is None:
-    raise ValueError("outputDir was not specified in settings.cfg!")
-
-try:
-    check_output([ffmpegPath, '-h'])
-except:
-    raise ValueError("Could not successfully execute '%s -h'. Did you set the correct path to ffmpeg?"%ffmpegPath)
-
-if codec == "copy":
-    print("\nvideoCodec has been set to 'copy'.\n'CRF', 'speed', 'resolution', and 'downscaler' options will be ignored.\n")
-    preset = None
-    crf = None
-    res = None
-    downscaler = None
-
-
-print("Loaded Settings\n---------------------------------------------------")
-
-print("ffmpegPath = %s\n"%ffmpegPath)
-
-print("camName = %s"%camName)
-print("camSerialNum = %s"%camSerialNum)
-print("comment = %s"%comment)
-print("copyright = %s\n"%copyright)
-
-print("sdCardRoot = %s"%sdCardRoot)
-print("outputDir = %s\n"%outputDir)
-
-print("maxDiff = %s"%maxDiff)
-print("videoCodec = %s"%codec)
-print("CRF = %s"%crf)
-print("speed = %s"%preset)
-print("resolution = %s"%res)
-print("downscaler = %s"%downscaler)
-print("combineMovieAndEMR = %s"%combineMovieAndEMR)
-print("optimizePhotos = %s\n"%optimizePhotos)
-
-print("---------------------------------------------------")
-
-
-ans = raw_input("If the above settings look correct and you agree to the terms of use type yes to begin or no to cancel...   ")
-if ans.lower() != "yes":
-    raise ValueError("User did not type yes, canceling operation.")
-
-dashCamVidRelativePath = "/Movie"
-dashCamEmrRelativePath = "/EMR"
-dashCamPhotoRelativePath = "/Photo"
 
 def getTitleDate(filename):
    name = os.path.basename(filename)
@@ -202,6 +100,14 @@ def getTitleTime(filename):
 
 def abslistdir(d):
     return [os.path.join(d,f) for f in os.listdir(d)]
+
+def getResolution(filePath):
+    cmd = "ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 '%s'"%filePath
+    res = check_output(shlex.split(cmd))
+    return res.strip()
+
+def all_same(items):
+    return all(x == items[0] for x in items)
 
 
 def processPhotos(plist):
@@ -219,11 +125,7 @@ def processPhotos(plist):
             changeFileCreationTime(outFile, ctime)
 
 
-
-
-
-
-def processVideosComplex(vlist):
+def processVideos(vlist):
     mTimes = [getTitleDate(vid) for vid in vlist]
     mTimes = list(set(mTimes))
 
@@ -242,93 +144,114 @@ def processVideosComplex(vlist):
             istart = int(ind_newVids[i])
             iend = int(ind_newVids[i + 1])
             vidList = vidDateList[istart:iend]
-            concat_cmd1 = ""
-            concat_cmd2 = ""
-            concat_cmd3 = ""
-            n = 0
-            for vid in vidList:
-                concat_cmd1 = concat_cmd1 + '-i "%s" '%vid
-                if res is None and denoise is None:
-                    concat_cmd2 = ""
-                elif denoise is None:
-                    concat_cmd2 = concat_cmd2 + "[%i:v]scale=%s:flags=%s[v%i]; "%(n, res, downscaler, n)
-                elif res is None:
-                    concat_cmd2 = concat_cmd2 + "[%i:v]%s[v%i]; "%(n, denoise, n)
-                else:
-                    concat_cmd2 = concat_cmd2 + "[%i:v]%s,scale=%s:flags=%s[v%i]; "%(n, denoise, res, downscaler, n)
-                concat_cmd3 = concat_cmd3 + "[v%i][%i:a]"%(n, n)
-                n+=1
-            concat_cmd = concat_cmd1 + '-filter_complex "'  + concat_cmd2 + concat_cmd3 + 'concat=n=%i:v=1:a=1[v][a]" -map [v] -map [a] '%n
-            fTime = getTitleTime(vidList[0])
-            outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
-            localmtime = getLocalmtime(vidList[0])
-            if codec == "copy":
-                raise RuntimeError("'Stream copy is not possible when concatenating different resolution videos.")
 
-            elif (codec == "libx264") or (codec == "libx265"):
-                cmd = [ffmpegPath, '-hide_banner'] + shlex.split(concat_cmd) + \
-                      ['-metadata', 'creation_time=%s' % str(localmtime),
-                       '-metadata', 'artist="%s"' % author,
-                       '-metadata', 'author="%s"' % author,
-                       '-metadata', 'album_author="%s"' % author,
-                       '-metadata', 'comment="%s"' % comment,
-                       '-metadata', 'copyright="%s"' % copyright,
-                       '-c:v', codec, '-preset', preset, '-crf', str(crf),
-                       '-c:a', audioCodec, '-b:a', audioBitrate, '-movflags', '+faststart',
-                       outputPath]
+            resolutions = [getResolution(vid) for vid in vidList]
+            if all_same(resolutions) and denoise is None:
+                processVideosBasic(fullVidList)
             else:
-                raise ValueError(
-                    "User-specified codec, %s, is not valid." % codec)
-            atime = os.path.getatime(vidList[0])
-            mtime = os.path.getmtime(vidList[0])
-            call(cmd)
-            os.utime(outputPath, (atime, mtime))
-            changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
+                processVideosComplex(fullVidList, mTime)
 
         istart = ind_newVids[-1]
         vidList = vidDateList[istart:]
-        concat_cmd1 = ""
-        concat_cmd2 = ""
-        concat_cmd3 = ""
-        n = 0
-        for vid in vidList:
-            concat_cmd1 = concat_cmd1 + '-i "%s" ' % vid
-            if res is None and denoise is None:
-                concat_cmd2 = ""
-            elif denoise is None:
-                concat_cmd2 = concat_cmd2 + "[%i:v]scale=%s:flags=%s[v%i]; " % (n, res, downscaler, n)
-            elif res is None:
-                concat_cmd2 = concat_cmd2 + "[%i:v]%s[v%i]; " % (n, denoise, n)
-            else:
-                concat_cmd2 = concat_cmd2 + "[%i:v]%s,scale=%s:flags=%s[v%i]; " % (n, denoise, res, downscaler, n)
-            concat_cmd3 = concat_cmd3 + "[v%i][%i:a]" % (n, n)
-            n += 1
-        concat_cmd = concat_cmd1 + '-filter_complex "' + concat_cmd2 + concat_cmd3 + 'concat=n=%i:v=1:a=1[v][a]" -map [v] -map [a] ' % n
-        fTime = getTitleTime(vidList[0])
-        outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
-        localmtime = getLocalmtime(vidList[0])
-        if codec == "copy":
-            raise RuntimeError("'Stream copy is not possible when concatenating different resolution videos.")
+        resolutions = [getResolution(vid) for vid in vidList]
+        if all_same(resolutions) and denoise is None:
+            processVideosBasic(fullVidList)
+        else:
+            processVideosComplex(fullVidList, mTime)
 
-        elif (codec == "libx264") or (codec == "libx265"):
-            cmd = [ffmpegPath, '-hide_banner'] + shlex.split(concat_cmd) + \
-                  ['-metadata', 'creation_time=%s' % str(localmtime),
+
+
+def processVideosBasic(vidList, mTime):
+    with open("vidList.txt", 'w') as listFile:
+        for vid in vidList:
+            listFile.write("file '%s'\n" % vid)
+    fTime = getTitleTime(vidList[0])
+    outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
+    localmtime = getLocalmtime(vidList[0])
+    if codec == "copy":
+        cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe', '0',
+               '-i', 'vidList.txt',
+               '-metadata', 'creation_time=%s'%str(localmtime),
+               '-metadata', 'artist="%s"'%author,
+               '-metadata', 'author="%s"'%author,
+               '-metadata', 'album_author="%s"'%author,
+               '-metadata', 'comment="%s"'%comment,
+               '-metadata', 'copyright="%s"'%copyright,
+               '-c:v', codec, '-c:a', 'copy', '-movflags', '+faststart',
+               outputPath]
+
+    elif (codec == "libx264") or (codec == "libx265"):
+        if res is None and denoise is None:
+            cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                   '0',
+                   '-i', 'vidList.txt',
+                   '-metadata', 'creation_time=%s' % str(localmtime),
                    '-metadata', 'artist="%s"' % author,
                    '-metadata', 'author="%s"' % author,
                    '-metadata', 'album_author="%s"' % author,
                    '-metadata', 'comment="%s"' % comment,
                    '-metadata', 'copyright="%s"' % copyright,
                    '-c:v', codec, '-preset', preset, '-crf', str(crf),
-                   '-c:a', audioCodec, '-b:a', audioBitrate, '-movflags', '+faststart',
+                   '-c:a', 'copy', '-movflags', '+faststart',
+                   outputPath]
+
+        elif res is not None and denoise is None:
+            cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                   '0',
+                   '-i', 'vidList.txt',
+                   '-metadata', 'creation_time=%s' % str(localmtime),
+                   '-metadata', 'artist="%s"' % author,
+                   '-metadata', 'author="%s"' % author,
+                   '-metadata', 'album_author="%s"' % author,
+                   '-metadata', 'comment="%s"' % comment,
+                   '-metadata', 'copyright="%s"' % copyright,
+                   '-vf', 'scale=%s' % res, '-sws_flags', downscaler,
+                   '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                   '-c:a', 'copy', '-movflags', '+faststart',
+                   outputPath]
+
+        elif res is None and denoise is not None:
+            cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                   '0',
+                   '-i', 'vidList.txt',
+                   '-metadata', 'creation_time=%s' % str(localmtime),
+                   '-metadata', 'artist="%s"' % author,
+                   '-metadata', 'author="%s"' % author,
+                   '-metadata', 'album_author="%s"' % author,
+                   '-metadata', 'comment="%s"' % comment,
+                   '-metadata', 'copyright="%s"' % copyright,
+                   '-vf', '%s' % denoise,
+                   '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                   '-c:a', 'copy', '-movflags', '+faststart',
+                   outputPath]
+
+        elif res is not None and denoise is not None:
+            cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
+                   '0',
+                   '-i', 'vidList.txt',
+                   '-metadata', 'creation_time=%s' % str(localmtime),
+                   '-metadata', 'artist="%s"' % author,
+                   '-metadata', 'author="%s"' % author,
+                   '-metadata', 'album_author="%s"' % author,
+                   '-metadata', 'comment="%s"' % comment,
+                   '-metadata', 'copyright="%s"' % copyright,
+                   '-vf', '%s,scale=%s:flags=%s'%(denoise,res,downscaler),
+                   '-c:v', codec, '-preset', preset, '-crf', str(crf),
+                   '-c:a', 'copy', '-movflags', '+faststart',
                    outputPath]
 
         else:
-            raise ValueError("User-specified codec, %s, is not valid." % codec)
-        atime = os.path.getatime(vidList[0])
-        mtime = os.path.getmtime(vidList[0])
-        call(cmd)
-        os.utime(outputPath, (atime, mtime))
-        changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
+            raise ValueError("Something went wrong, should not get here.")
+
+
+    else:
+        raise ValueError(
+            "User-specified codec, %s, is not valid." % codec)
+    atime = os.path.getatime(vidList[0])
+    mtime = os.path.getmtime(vidList[0])
+    call(cmd)
+    os.utime(outputPath, (atime, mtime))
+    changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
     try:
         os.remove("vidList.txt")
@@ -336,60 +259,195 @@ def processVideosComplex(vlist):
         pass
 
 
-def getResolution(filePath):
-    cmd = "ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 '%s'"%filePath
-    res = check_output(shlex.split(cmd))
-    return res.strip()
+def processVideosComplex(vidList, mTime):
+    concat_cmd1 = ""
+    concat_cmd2 = ""
+    concat_cmd3 = ""
+    n = 0
+    for vid in vidList:
+        concat_cmd1 = concat_cmd1 + '-i "%s" '%vid
+        if res is None and denoise is None:
+            concat_cmd2 = ""
+        elif denoise is None:
+            concat_cmd2 = concat_cmd2 + "[%i:v]scale=%s:flags=%s[v%i]; "%(n, res, downscaler, n)
+        elif res is None:
+            concat_cmd2 = concat_cmd2 + "[%i:v]%s[v%i]; "%(n, denoise, n)
+        else:
+            concat_cmd2 = concat_cmd2 + "[%i:v]%s,scale=%s:flags=%s[v%i]; "%(n, denoise, res, downscaler, n)
+        concat_cmd3 = concat_cmd3 + "[v%i][%i:a]"%(n, n)
+        n+=1
+    concat_cmd = concat_cmd1 + '-filter_complex "'  + concat_cmd2 + concat_cmd3 + 'concat=n=%i:v=1:a=1[v][a]" -map [v] -map [a] '%n
+    fTime = getTitleTime(vidList[0])
+    outputPath = "%s/%s_%s_trip.mp4" % (outputDir, mTime, fTime)
+    localmtime = getLocalmtime(vidList[0])
+    if codec == "copy":
+        raise RuntimeError("'Stream copy is not possible when concatenating different resolution videos.")
+
+    elif (codec == "libx264") or (codec == "libx265"):
+        cmd = [ffmpegPath, '-hide_banner'] + shlex.split(concat_cmd) + \
+              ['-metadata', 'creation_time=%s' % str(localmtime),
+               '-metadata', 'artist="%s"' % author,
+               '-metadata', 'author="%s"' % author,
+               '-metadata', 'album_author="%s"' % author,
+               '-metadata', 'comment="%s"' % comment,
+               '-metadata', 'copyright="%s"' % copyright,
+               '-c:v', codec, '-preset', preset, '-crf', str(crf),
+               '-c:a', audioCodec, '-b:a', audioBitrate, '-movflags', '+faststart',
+               outputPath]
+    else:
+        raise ValueError(
+            "User-specified codec, %s, is not valid." % codec)
+    atime = os.path.getatime(vidList[0])
+    mtime = os.path.getmtime(vidList[0])
+    call(cmd)
+    os.utime(outputPath, (atime, mtime))
+    changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
 
-def all_same(items):
-    return all(x == items[0] for x in items)
 
-vidList = abslistdir(sdCardRoot+dashCamVidRelativePath)
-fullVidList = [vid for vid in vidList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
-fullVidList.sort()
 
-emrList = abslistdir(sdCardRoot+dashCamEmrRelativePath)
-fullEmrList = [vid for vid in emrList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
-fullEmrList.sort()
+"""
+MAIN CODE IS BELOW
+"""
 
-picList = abslistdir(sdCardRoot + dashCamPhotoRelativePath)
+if __name__ == "__main__":
+    print("\n\nYiDashCamConcatenate Copyright (C) 2019 David John Neiferd\n")
+    print("This program is distributed in the hope that it will be useful,")
+    print("but WITHOUT ANY WARRANTY; without even the implied warranty of")
+    print("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the")
+    print("GNU General Public License for more details.")
+    print("This is free software, and you are welcome to redistribute it")
+    print("under certain conditions.")
+    print("See the README.md and LICENSE files for details.\n\n")
 
-if combineMovieAndEMR:
-    baselist = [os.path.basename(vid) for vid in (fullVidList+fullEmrList)]
-    ind = pyargsort(baselist)
-    fullBase = (fullVidList+fullEmrList)
-    fullList = [fullBase[i] for i in ind]
-    resolutions = [getResolution(vid) for vid in fullList]
-    if all_same(resolutions) and denoise is None:
+    sleep(5)
+
+    # Some defaults if not defined in settings.cfg
+    maxDiff = 5
+    codec = "copy"
+    preset = "medium"
+    crf = "23"
+    res = None
+    downscaler = "bicubic"
+    sdCardRoot = None
+    outputDir = None
+    ffmpegPath = "ffmpeg"
+    camName = ""
+    camModel = ""
+    camSerialNum = ""
+    comment = ""
+    copyright = ""
+    combineMovieAndEMR = False
+    optimizePhotos = False
+    resolution = None
+    CRF = 23
+    speed = "medium"
+    videoCodec = "copy"
+    denoise = None
+    audioCodec = "aac"
+    audioBitrate = "192k"
+    jpegoptimPath = None
+
+    # Load configuration file
+    if getattr(sys, 'frozen', False):
+        application_path = os.path.dirname(sys.executable)
+    elif __file__:
+        application_path = os.path.dirname(__file__)
+    for line in open(application_path + "/settings.cfg", 'r'):
+        exec (line)
+    codec = videoCodec
+    preset = speed
+    crf = CRF
+    res = resolution
+    author = camName + " " + camModel + " " + camSerialNum
+
+    if sdCardRoot is None:
+        raise ValueError("sdCardRoot was not specified in settings.cfg!")
+
+    if outputDir is None:
+        raise ValueError("outputDir was not specified in settings.cfg!")
+
+    try:
+        check_output([ffmpegPath, '-h'])
+    except:
+        raise ValueError("Could not successfully execute '%s -h'. Did you set the correct path to ffmpeg?" % ffmpegPath)
+
+    if codec == "copy":
+        print(
+            "\nvideoCodec has been set to 'copy'.\n'CRF', 'speed', 'resolution', 'denoise', and 'downscaler' options will be ignored.\n")
+        preset = None
+        crf = None
+        res = None
+        downscaler = None
+        denoise = None
+
+    print("Loaded Settings\n---------------------------------------------------")
+
+    print("ffmpegPath = %s" % ffmpegPath)
+    print("jpegOptimPath = %s\n" % jpegoptimPath)
+
+    print("camName = %s" % camName)
+    print("camSerialNum = %s" % camSerialNum)
+    print("comment = %s" % comment)
+    print("copyright = %s\n" % copyright)
+
+    print("sdCardRoot = %s" % sdCardRoot)
+    print("outputDir = %s\n" % outputDir)
+
+    print("maxDiff = %s" % maxDiff)
+    print("videoCodec = %s" % codec)
+    print("CRF = %s" % crf)
+    print("speed = %s" % preset)
+    print("resolution = %s" % res)
+    print("downscaler = %s" % downscaler)
+    print("denoise = %s" % denoise)
+    print("audioCodec = %s" % audioCodec)
+    print("audioBitrate = %s" % audioBitrate)
+    print("combineMovieAndEMR = %s" % combineMovieAndEMR)
+    print("optimizePhotos = %s\n" % optimizePhotos)
+
+    print("---------------------------------------------------")
+
+    ans = raw_input(
+        "If the above settings look correct and you agree to the terms of use type yes to begin or no to cancel...   ")
+    if ans.lower() != "yes":
+        raise ValueError("User did not type yes, canceling operation.")
+
+    dashCamVidRelativePath = "/Movie"
+    dashCamEmrRelativePath = "/EMR"
+    dashCamPhotoRelativePath = "/Photo"
+
+    vidList = abslistdir(sdCardRoot+dashCamVidRelativePath)
+    fullVidList = [vid for vid in vidList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
+    fullVidList.sort()
+
+    emrList = abslistdir(sdCardRoot+dashCamEmrRelativePath)
+    fullEmrList = [vid for vid in emrList if (vid.endswith(".MP4") or vid.endswith(".mp4")) and "_s" not in vid]
+    fullEmrList.sort()
+
+    picList = abslistdir(sdCardRoot + dashCamPhotoRelativePath)
+
+    if combineMovieAndEMR:
+        baselist = [os.path.basename(vid) for vid in (fullVidList+fullEmrList)]
+        ind = pyargsort(baselist)
+        fullBase = (fullVidList+fullEmrList)
+        fullList = [fullBase[i] for i in ind]
         processVideos(fullList)
     else:
-        processVideosComplex(fullList)
-else:
-    resolutions = [getResolution(vid) for vid in fullVidList]
-    if all_same(resolutions) and denoise is None:
         processVideos(fullVidList)
-    else:
-        processVideosComplex(fullVidList)
-    resolutions = [getResolution(vid) for vid in fullEmrList]
-    if all_same(resolutions) and denoise is None:
         processVideos(fullEmrList)
-    else:
-        processVideosComplex(fullEmrList)
 
+    processPhotos(picList)
 
-processPhotos(picList)
+    print("\nAll done!\n")
 
+    print("\n\nYiDashCamConcatenate Copyright (C) 2019 David John Neiferd\n")
+    print("This program is distributed in the hope that it will be useful,")
+    print("but WITHOUT ANY WARRANTY; without even the implied warranty of")
+    print("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the")
+    print("GNU General Public License for more details.")
+    print("This is free software, and you are welcome to redistribute it")
+    print("under certain conditions.")
+    print("See the README.md and LICENSE files for details.\n\n")
 
-print("\nAll done!\n")
-
-print("\n\nYiDashCamConcatenate Copyright (C) 2019 David John Neiferd\n")
-print("This program is distributed in the hope that it will be useful,")
-print("but WITHOUT ANY WARRANTY; without even the implied warranty of")
-print("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the")
-print("GNU General Public License for more details.")
-print("This is free software, and you are welcome to redistribute it")
-print("under certain conditions.")
-print("See the README.md and LICENSE files for details.\n\n")
-
-sleep(6)
+    sleep(6)
