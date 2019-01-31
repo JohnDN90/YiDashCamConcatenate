@@ -147,17 +147,17 @@ def processVideos(vlist):
 
             resolutions = [getResolution(vid) for vid in vidList]
             if all_same(resolutions) and denoise is None:
-                processVideosBasic(fullVidList)
+                processVideosBasic(vidList, mTime)
             else:
-                processVideosComplex(fullVidList, mTime)
+                processVideosComplex(vidList, mTime)
 
         istart = ind_newVids[-1]
         vidList = vidDateList[istart:]
         resolutions = [getResolution(vid) for vid in vidList]
         if all_same(resolutions) and denoise is None:
-            processVideosBasic(fullVidList)
+            processVideosBasic(vidList, mTime)
         else:
-            processVideosComplex(fullVidList, mTime)
+            processVideosComplex(vidList, mTime)
 
 
 
