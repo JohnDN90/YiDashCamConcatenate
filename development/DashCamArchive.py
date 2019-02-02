@@ -31,6 +31,7 @@ from datetime import datetime
 from shutil import copyfile
 import sys
 import shlex
+from warnings import warn
 
 if os.name == "nt":
     import pywintypes, win32file, win32con
@@ -83,6 +84,61 @@ empty = pyempty
 diff = pydiff
 where = pywhere
 concatenate = pyconcatenate
+
+errorVideos = []
+
+def checkVideoFile(filePath):
+    """
+    Checks the integrity of a video file. First performs a quick test on only
+    the metadata using ffprobe. If the quick test passes, performs an
+    intermediate test on only the audio stream using "ffmpeg -v error". If, the
+    intermediate test passes, a final extensive test is performed on both the
+    video and audio streams using "ffmpeg -v error".
+
+    Parameters
+    ----------
+    filePath    :   str
+        Path to the video file to be checked for errors.
+
+    Returns
+    -------
+    retCode :   int
+        Return code, 0 if no errors detected, otherwise nonzero.
+
+    Notes
+    -----
+    The final test on both audio and video streams does everything the first two
+    tests do. The first two tests run very fast however and are included so the
+    code runs faster in the case of a corrupted video file. In the case of a
+    valid file, the increase in runtime is negligible.
+    """
+    print("\nChecking integrity of transcoded video file...")
+    # Perform fast basic test (ffprobe) first
+    cmd = 'ffprobe -hide_banner -i "%s"'%filePath
+    retCode = call(shlex.split(cmd))
+    if retCode:
+        print("Test 1 of 3: Failed\nExiting...\n")
+        return retCode
+    # If the basic test passed, perform the longer tests (ffmpeg -v error)
+    else:
+        print("Test 1 of 3: Passed")
+        # Perform an intermediate test on only the audio stream
+        cmd = 'ffmpeg -hide_banner -v error -i "%s" -map 0:1 -f null -' % filePath
+        retCode = call(shlex.split(cmd))
+        if retCode:
+            print("Test 2 of 3: Failed\nExiting...\n")
+            return retCode
+        else:
+            print("Test 2 of 3: Passed")
+            # Performn an extensive test on both video and audio streams
+            cmd = 'ffmpeg -hide_banner -v error -i "%s" -f null -'%filePath
+            retCode = call(shlex.split(cmd))
+            if retCode:
+                print("Test 3 of 3: Failed\nExiting...\n")
+            else:
+                print("Test 3 of 3: Passed\nExiting...\n")
+    return retCode
+
 
 def getIndNewVids(stimes, maxDiff):
     logic = [(i-60.0)>maxDiff for i in diff(stimes)]
@@ -249,7 +305,13 @@ def processVideosBasic(vidList, mTime):
             "User-specified codec, %s, is not valid." % codec)
     atime = os.path.getatime(vidList[0])
     mtime = os.path.getmtime(vidList[0])
-    call(cmd)
+    encodeRetCode = call(cmd)
+    if encodeRetCode:
+        warn("ERROR: Encoding process returned a %s error code."%encodeRetCode)
+        errorVideos.append(outputPath)
+    if checkVideoFile(outputPath):
+        warn("ERROR: Integrity check of %s failed!"%outputPath)
+        errorVideos.append(outputPath)
     os.utime(outputPath, (atime, mtime))
     changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
@@ -299,7 +361,13 @@ def processVideosComplex(vidList, mTime):
             "User-specified codec, %s, is not valid." % codec)
     atime = os.path.getatime(vidList[0])
     mtime = os.path.getmtime(vidList[0])
-    call(cmd)
+    encodeRetCode = call(cmd)
+    if encodeRetCode:
+        warn("ERROR: Encoding process returned a %s error code."%encodeRetCode)
+        errorVideos.append(outputPath)
+    if checkVideoFile(outputPath):
+        warn("ERROR: Integrity check of %s failed!"%outputPath)
+        errorVideos.append(outputPath)
     os.utime(outputPath, (atime, mtime))
     changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
@@ -438,6 +506,10 @@ if __name__ == "__main__":
         processVideos(fullEmrList)
 
     processPhotos(picList)
+
+    errorVideos = set(errorVideos)
+    if len(errorVideos)>0:
+        warn("Encounter errors on the following videos: %s"%errorVideos)
 
     print("\nAll done!\n")
 
