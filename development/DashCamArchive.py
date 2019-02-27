@@ -49,6 +49,48 @@ else:
         # This is not supported on Linux systems.
         pass
 
+
+def callFFmpeg(cmd):
+    """
+    A wrapper around subprocess.call which handles the case of when user
+    specifies not to overwrite an existing file.
+    """
+
+    # If command is a string, split it into a list
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+
+    # Handle the case for when a file exists
+    if (cmd[-1].lower()=="-y"):
+        ignoreRetCode = False
+    elif (cmd[-1].lower()=="-n"):
+        if os.path.isfile(cmd[-2]):
+            ignoreRetCode = True
+        else:
+            ignoreRetCode = False
+    else:
+        if os.path.isfile(cmd[-1]):
+            ans = raw_input("File '%s' already exists. Overwrite ? [y/N] "%cmd[-1]) or "N"
+            if (ans.lower() == "y") or (ans.lower() == "yes"):
+                overwrite = "-y"
+                ignoreRetCode = False
+            else:
+                overwrite = "-n"
+                ignoreRetCode = True
+            cmd.append(overwrite)
+
+    # Call FFmpeg
+    encodeRetCode = call(cmd)
+
+    # If overwriting was not specified, set error code to -1 to indicate user
+    # specified not to overwrite existing file.
+    if (encodeRetCode) and (ignoreRetCode):
+        encodeRetCode = -1
+
+    return encodeRetCode
+
+
+
 def getUTCmtime(filePath):
     mt = os.path.getmtime(filePath)
     local = timezone("America/New_York")
@@ -303,15 +345,27 @@ def processVideosBasic(vidList, mTime):
     else:
         raise ValueError(
             "User-specified codec, %s, is not valid." % codec)
+
+    if overwriteExistingVideo:
+        cmd.append("-y")
+    elif overwriteExistingVideo is False:
+        cmd.append("-n")
+    else:
+        # Otherwise, ffmpeg was ask user at command line each time
+        pass
+
     atime = os.path.getatime(vidList[0])
     mtime = os.path.getmtime(vidList[0])
-    encodeRetCode = call(cmd)
-    if encodeRetCode:
+    encodeRetCode = callFFmpeg(cmd)
+    if encodeRetCode and (encodeRetCode != -1):
         warn("ERROR: Encoding process returned a %s error code."%encodeRetCode)
         errorVideos.append(outputPath)
-    if checkVideoFile(outputPath):
-        warn("ERROR: Integrity check of %s failed!"%outputPath)
-        errorVideos.append(outputPath)
+    if  encodeRetCode==0:
+        if checkVideoFile(outputPath):
+            warn("ERROR: Integrity check of %s failed!"%outputPath)
+            errorVideos.append(outputPath)
+        else:
+            pass
     os.utime(outputPath, (atime, mtime))
     changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
@@ -359,15 +413,27 @@ def processVideosComplex(vidList, mTime):
     else:
         raise ValueError(
             "User-specified codec, %s, is not valid." % codec)
+
+    if overwriteExistingVideo:
+        cmd.append("-y")
+    elif overwriteExistingVideo is False:
+        cmd.append("-n")
+    else:
+        # Otherwise, ffmpeg was ask user at command line each time
+        pass
+
     atime = os.path.getatime(vidList[0])
     mtime = os.path.getmtime(vidList[0])
-    encodeRetCode = call(cmd)
-    if encodeRetCode:
+    encodeRetCode = callFFmpeg(cmd)
+    if encodeRetCode and (encodeRetCode != -1):
         warn("ERROR: Encoding process returned a %s error code."%encodeRetCode)
         errorVideos.append(outputPath)
-    if checkVideoFile(outputPath):
-        warn("ERROR: Integrity check of %s failed!"%outputPath)
-        errorVideos.append(outputPath)
+    if  encodeRetCode==0:
+        if checkVideoFile(outputPath):
+            warn("ERROR: Integrity check of %s failed!"%outputPath)
+            errorVideos.append(outputPath)
+        else:
+            pass
     os.utime(outputPath, (atime, mtime))
     changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
@@ -415,6 +481,7 @@ if __name__ == "__main__":
     audioCodec = "aac"
     audioBitrate = "192k"
     jpegoptimPath = None
+    overwriteExistingVideo = None
 
     # Load configuration file
     if getattr(sys, 'frozen', False):
@@ -472,7 +539,8 @@ if __name__ == "__main__":
     print("audioCodec = %s" % audioCodec)
     print("audioBitrate = %s" % audioBitrate)
     print("combineMovieAndEMR = %s" % combineMovieAndEMR)
-    print("optimizePhotos = %s\n" % optimizePhotos)
+    print("optimizePhotos = %s" % optimizePhotos)
+    print("overwriteExistingVideo = %s\n"%overwriteExistingVideo)
 
     print("---------------------------------------------------")
 
