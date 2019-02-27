@@ -105,21 +105,36 @@ def getLocalmtime(filePath):
     return naive.strftime("%Y-%m-%d %H:%M:%S")
 
 def pyempty(n):
+    """
+    Function to replace numpy.empty(n) functionality.
+    """
     return [1.0]*n
 
 def pydiff(v):
+    """
+    Function to replace numpy.diff(v) functionality.
+    """
     return [j-i for i, j in zip(v[:-1], v[1:])]
 
 def pywhere(v):
+    """
+    Function to replace numpy.where(n) functionality.
+    """
     return ([i for i, x in enumerate(v) if x],)
 
 def pyconcatenate(vlist):
+    """
+    Function to replace numpy.concatenate() functionality.
+    """
     list = []
     for v in vlist:
         list = list + v
     return list
 
 def pyargsort(vlist):
+    """
+    Function to replace numpy.argsort(n) functionality.
+    """
     return sorted(range(len(vlist)), key=vlist.__getitem__)
 
 empty = pyempty
