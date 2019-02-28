@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 YiDashCamConcatenate (YDCC)
 
@@ -55,25 +56,21 @@ def callFFmpeg(cmd):
     A wrapper around subprocess.call which handles the case of when user
     specifies not to overwrite an existing file.
     """
+    ignoreRetCode = False
 
     # If command is a string, split it into a list
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
 
     # Handle the case for when a file exists
-    if (cmd[-1].lower()=="-y"):
-        ignoreRetCode = False
-    elif (cmd[-1].lower()=="-n"):
+    if (cmd[-1].lower()=="-n"):
         if os.path.isfile(cmd[-2]):
             ignoreRetCode = True
-        else:
-            ignoreRetCode = False
     else:
         if os.path.isfile(cmd[-1]):
             ans = raw_input("File '%s' already exists. Overwrite ? [y/N] "%cmd[-1]) or "N"
             if (ans.lower() == "y") or (ans.lower() == "yes"):
                 overwrite = "-y"
-                ignoreRetCode = False
             else:
                 overwrite = "-n"
                 ignoreRetCode = True
@@ -259,7 +256,7 @@ def processVideos(vlist):
             vidList = vidDateList[istart:iend]
 
             resolutions = [getResolution(vid) for vid in vidList]
-            if all_same(resolutions) and denoise is None:
+            if all_same(resolutions) and videoFilters is None:
                 processVideosBasic(vidList, mTime)
             else:
                 processVideosComplex(vidList, mTime)
@@ -267,7 +264,7 @@ def processVideos(vlist):
         istart = ind_newVids[-1]
         vidList = vidDateList[istart:]
         resolutions = [getResolution(vid) for vid in vidList]
-        if all_same(resolutions) and denoise is None:
+        if all_same(resolutions) and videoFilters is None:
             processVideosBasic(vidList, mTime)
         else:
             processVideosComplex(vidList, mTime)
@@ -294,7 +291,7 @@ def processVideosBasic(vidList, mTime):
                outputPath]
 
     elif (codec == "libx264") or (codec == "libx265"):
-        if res is None and denoise is None:
+        if res is None and videoFilters is None:
             cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
                    '0',
                    '-i', 'vidList.txt',
@@ -308,7 +305,7 @@ def processVideosBasic(vidList, mTime):
                    '-c:a', 'copy', '-movflags', '+faststart',
                    outputPath]
 
-        elif res is not None and denoise is None:
+        elif res is not None and videoFilters is None:
             cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
                    '0',
                    '-i', 'vidList.txt',
@@ -323,7 +320,7 @@ def processVideosBasic(vidList, mTime):
                    '-c:a', 'copy', '-movflags', '+faststart',
                    outputPath]
 
-        elif res is None and denoise is not None:
+        elif res is None and videoFilters is not None:
             cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
                    '0',
                    '-i', 'vidList.txt',
@@ -333,12 +330,12 @@ def processVideosBasic(vidList, mTime):
                    '-metadata', 'album_author="%s"' % author,
                    '-metadata', 'comment="%s"' % comment,
                    '-metadata', 'copyright="%s"' % copyright,
-                   '-vf', '%s' % denoise,
+                   '-vf', '%s' % videoFilters,
                    '-c:v', codec, '-preset', preset, '-crf', str(crf),
                    '-c:a', 'copy', '-movflags', '+faststart',
                    outputPath]
 
-        elif res is not None and denoise is not None:
+        elif res is not None and videoFilters is not None:
             cmd = [ffmpegPath, '-hide_banner', '-f', 'concat', '-safe',
                    '0',
                    '-i', 'vidList.txt',
@@ -348,7 +345,7 @@ def processVideosBasic(vidList, mTime):
                    '-metadata', 'album_author="%s"' % author,
                    '-metadata', 'comment="%s"' % comment,
                    '-metadata', 'copyright="%s"' % copyright,
-                   '-vf', '%s,scale=%s:flags=%s'%(denoise,res,downscaler),
+                   '-vf', '%s,scale=%s:flags=%s'%(videoFilters,res,downscaler),
                    '-c:v', codec, '-preset', preset, '-crf', str(crf),
                    '-c:a', 'copy', '-movflags', '+faststart',
                    outputPath]
@@ -381,8 +378,8 @@ def processVideosBasic(vidList, mTime):
             errorVideos.append(outputPath)
         else:
             pass
-    os.utime(outputPath, (atime, mtime))
-    changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
+        os.utime(outputPath, (atime, mtime))
+        changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
     try:
         os.remove("vidList.txt")
@@ -397,14 +394,14 @@ def processVideosComplex(vidList, mTime):
     n = 0
     for vid in vidList:
         concat_cmd1 = concat_cmd1 + '-i "%s" '%vid
-        if res is None and denoise is None:
+        if res is None and videoFilters is None:
             concat_cmd2 = ""
-        elif denoise is None:
+        elif videoFilters is None:
             concat_cmd2 = concat_cmd2 + "[%i:v]scale=%s:flags=%s[v%i]; "%(n, res, downscaler, n)
         elif res is None:
-            concat_cmd2 = concat_cmd2 + "[%i:v]%s[v%i]; "%(n, denoise, n)
+            concat_cmd2 = concat_cmd2 + "[%i:v]%s[v%i]; "%(n, videoFilters, n)
         else:
-            concat_cmd2 = concat_cmd2 + "[%i:v]%s,scale=%s:flags=%s[v%i]; "%(n, denoise, res, downscaler, n)
+            concat_cmd2 = concat_cmd2 + "[%i:v]%s,scale=%s:flags=%s[v%i]; "%(n, videoFilters, res, downscaler, n)
         concat_cmd3 = concat_cmd3 + "[v%i][%i:a]"%(n, n)
         n+=1
     concat_cmd = concat_cmd1 + '-filter_complex "'  + concat_cmd2 + concat_cmd3 + 'concat=n=%i:v=1:a=1[v][a]" -map [v] -map [a] '%n
@@ -449,8 +446,8 @@ def processVideosComplex(vidList, mTime):
             errorVideos.append(outputPath)
         else:
             pass
-    os.utime(outputPath, (atime, mtime))
-    changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
+        os.utime(outputPath, (atime, mtime))
+        changeFileCreationTime(outputPath, os.path.getctime(vidList[0]))
 
 
 
@@ -492,18 +489,24 @@ if __name__ == "__main__":
     CRF = 23
     speed = "medium"
     videoCodec = "copy"
-    denoise = None
+    videoFilters = None
     audioCodec = "aac"
     audioBitrate = "192k"
     jpegoptimPath = None
     overwriteExistingVideo = None
 
-    # Load configuration file
-    if getattr(sys, 'frozen', False):
-        application_path = os.path.dirname(sys.executable)
-    elif __file__:
-        application_path = os.path.dirname(__file__)
-    for line in open(application_path + "/settings.cfg", 'r'):
+    # Get the Configuration File Path
+    if len(sys.argv)>1:
+        config_file = sys.argv[1]
+    else:
+        if getattr(sys, 'frozen', False):
+            application_path = os.path.dirname(sys.executable)
+        elif __file__:
+            application_path = os.path.dirname(os.path.abspath(__file__))
+        config_file = application_path + "/settings.cfg"
+
+    # Load the Configuration File
+    for line in open(config_file, 'r'):
         exec (line)
     codec = videoCodec
     preset = speed
@@ -524,12 +527,12 @@ if __name__ == "__main__":
 
     if codec == "copy":
         print(
-            "\nvideoCodec has been set to 'copy'.\n'CRF', 'speed', 'resolution', 'denoise', and 'downscaler' options will be ignored.\n")
+            "\nvideoCodec has been set to 'copy'.\n'CRF', 'speed', 'resolution', 'videoFilters', and 'downscaler' options will be ignored.\n")
         preset = None
         crf = None
         res = None
         downscaler = None
-        denoise = None
+        videoFilters = None
 
     print("Loaded Settings\n---------------------------------------------------")
 
@@ -550,7 +553,7 @@ if __name__ == "__main__":
     print("speed = %s" % preset)
     print("resolution = %s" % res)
     print("downscaler = %s" % downscaler)
-    print("denoise = %s" % denoise)
+    print("videoFilters = %s" % videoFilters)
     print("audioCodec = %s" % audioCodec)
     print("audioBitrate = %s" % audioBitrate)
     print("combineMovieAndEMR = %s" % combineMovieAndEMR)

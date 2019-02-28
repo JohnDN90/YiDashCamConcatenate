@@ -65,15 +65,21 @@ pytz, and datetime.
 2) Edit the settings.cfg file to your desired settings. See Settings sections for
 more details.
 
-3) In Linux, open a terminal and type /path/to/DashCamArchive, press enter, and 
+3) In Linux, open a terminal and type /path/to/YDCC, press enter, and 
 follow on-screen instruction. (Be sure to replace /path/to with the actual path 
 on your PC).  If you get a "Permission denied" error, you'll have to set "YDCC"
 as executable by right clicking on YDCC, click Properties, click Permission, 
 click the  box beside "Allow executing file as program" so that a checkmark 
-appears in it, then click Close.
+appears in it, then click Close.  Optionally, you could specify an alternative
+configuration file location by passing the path as the first argument to the
+program, for example: /path/to/YDCC /path/to/alternative_settings.cfg
 
-4) In Windows, double click "YDCC", it should open in the Command Prompt, follow
-the on-screen instructions.
+4) In Windows, double click "YDCC", it should open in the Command Prompt and
+load the default configuration file (located in same directory as YDCC), 
+follow the on-screen instructions.  Additionally, you can open the Command 
+Prompt and execute the program as C:\Users\John\path\to\YDCC  or to use an 
+alternative configuration file use C:\Users\John\path\to\YDCC 
+C:\Users\John\path\to\alternative_settings.cfg
 
 
 ## Settings
@@ -190,6 +196,25 @@ for more details.
 This has no effect when using videoCodec="copy" or 
 when resolution=None.
 
+#### videoFilters
+Video filters in FFmpeg to apply to the video. These filters will be applied
+BEFORE any downscaling. For example, you could use a Non-Local Means filter
+by setting this value to "nlmeans=s=2.0:p=9:r=17" or the High Quality 3D Denoise
+filter by setting this value to "hqdn3d". See
+https://ffmpeg.org/ffmpeg-filters.html and 
+https://trac.ffmpeg.org/wiki/FilteringGuide for a list of different filters and
+how to use them.
+
+This has no effect when videoCodec="copy".
+
+#### audioCodec = "libfdk_aac"
+The audio codec to use. Currently only used for processVideoComplex (i.e. when
+the videos to be concatenated are different codecs and/or different resolutions).
+
+#### audioBitrate = "128k"
+The bitrate to use for audio encoding. Has no effect for the "copy" audio codec.
+Currently only used for processVideoComplex (i.e. when the videos to be 
+concatenated are different codecs and/or different resolutions).
 
 #### combineMovieAndEMR
 Whether the videos stored in the EMR folder should be combined with the videos
@@ -205,4 +230,10 @@ reducing photo quality.  This is essentially lossless compression which utilizes
 the jpegoptim program. If set to True, you must specify the path to jpegoptim on
 your system in the jpegoptimPath variable.
 
-
+#### overwriteExistingVideo
+Controls the behavior of FFmpeg when the output file already exists.  Setting to
+None causes FFmpeg to ask you if you wish to overwrite the file or not each time
+an existing file is encountered.  Setting to True will automatically overwrite
+the file by passing the "-y" argument to FFmepg.  Setting to False will 
+automatically skip the file (not overwriting it) by passing the "-n" argument to 
+FFmpeg.
